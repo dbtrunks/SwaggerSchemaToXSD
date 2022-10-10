@@ -13,5 +13,7 @@
         public string Format { get; set; }
 
         public string Ref { get; set; }
+
+        public List<string>? Enum { get; set; }
     }
 }

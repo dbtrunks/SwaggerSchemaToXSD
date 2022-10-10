@@ -35,12 +35,28 @@ namespace SwaggerSchemaToXSD
                     if (!string.IsNullOrEmpty(refType))
                         refType = refType.Replace("#/components/schemas/", "").ToString();
 
+                    if (prop.First.Value<string>("type") == "array")
+                    {
+                        string refTypeArr = prop.Children()["items"].First().Value<string>("$ref");
+                        if (!string.IsNullOrEmpty(refTypeArr))
+                            refType = refTypeArr.Replace("#/components/schemas/", "").ToString();
+                    }
+
+
+                    List<string> enmList = null;
+                    var enm = prop.First.Value<JArray>("enum");
+                    if (enm?.Count > 0)
+                    {
+                        enmList = enm.Values<string>().ToList();
+                    }
+
                     Propertie propertie = new Propertie()
                     {
                         Name = ((JProperty)prop).Name,
                         Type = prop.First.Value<string>("type"),
                         Format = prop.First.Value<string>("format"),
-                        Ref = refType
+                        Ref = refType,
+                        Enum = enmList
                     };
 
                     element.Properties.Add(propertie);
@@ -54,6 +70,9 @@ namespace SwaggerSchemaToXSD
 
         private void GenerateXSD(List<Element> elementList)
         {
+
+            var enumeration = new Dictionary<string, List<string>>();
+
             StringBuilder fileXsd = new StringBuilder("<?xml version=\"1.0\"?>");
             fileXsd.AppendLine($"<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">");
             foreach (var element in elementList)
@@ -65,12 +84,39 @@ namespace SwaggerSchemaToXSD
                 foreach (var pro in element.Properties)
                 {
                     if (string.IsNullOrEmpty(pro.Ref))
-                        if (pro.Type == "array")
-                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"Array\"/>");
+                    {
+                        string type = pro.Type;
+                        switch (pro.Type)
+                        {
+                            case "number":
+                                type = "decimal";
+                                break;
+                            case "string":
+                                if (pro.Format == "date-time")
+                                    type = "date";
+                                break;
+                            default:
+                                break;
+                        }
+
+                        if (pro.Enum == null)
+                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"xs:{type}\"/>");
                         else
-                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"xs:{pro.Type}\"/>");
+                        {
+                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"{pro.Name.ToLower()}\"/>");
+                            if (!enumeration.ContainsKey(pro.Name.ToLower()))
+                                enumeration.Add(pro.Name.ToLower(), pro.Enum);
+
+                        }
+                    }
                     else
-                        fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"{pro.Ref}\"/>");
+                    {
+                        if (!string.IsNullOrEmpty(pro.Ref) && pro.Type == "array")
+                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"{pro.Ref}\" maxOccurs=\"unbounded\" minOccurs=\"0\" />");
+                        else
+                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"{pro.Ref}\"/>");
+                    }
+
 
                 }
                 fileXsd.AppendLine($"</xs:sequence>");
@@ -79,12 +125,20 @@ namespace SwaggerSchemaToXSD
 
             }
 
+            foreach (var enu in enumeration.Distinct())
+            {
+                fileXsd.AppendLine($"<xs:simpleType name=\"{enu.Key}\" final=\"restriction\" >");
+                fileXsd.AppendLine($"<xs:restriction base=\"xs:string\">");
+                foreach (var item in enu.Value)
+                {
+                    fileXsd.AppendLine($"<xs:enumeration value=\"{item}\" />");
+                }
 
-            fileXsd.AppendLine($"<xs:complexType name=\"Array\">");
-            fileXsd.AppendLine($"<xs:sequence>");
-            fileXsd.AppendLine($"<xs:element maxOccurs=\"unbounded\" name=\"date\" type=\"xs:string\"/>");
-            fileXsd.AppendLine($"</xs:sequence>");
-            fileXsd.AppendLine($"</xs:complexType>");
+                fileXsd.AppendLine($"</xs:restriction>");
+                fileXsd.AppendLine($"</xs:simpleType>");
+
+            }
+
 
 
 
