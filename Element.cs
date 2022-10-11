@@ -4,6 +4,7 @@
     {
         public string Name { get; set; }
         public List<Propertie> Properties { get; set; }
+        public bool IsEnum { get; set; } 
     }
 
     public class Propertie

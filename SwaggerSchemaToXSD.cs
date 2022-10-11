@@ -6,10 +6,6 @@ namespace SwaggerSchemaToXSD
 {
     public class SwaggerSchemaToXSD
     {
-
-
-
-
         public JObject? LoadJson()
         {
             using (StreamReader r = new StreamReader("swagger.json"))
@@ -20,7 +16,6 @@ namespace SwaggerSchemaToXSD
             }
         }
 
-
         public string ConvertSchemaTosxd(JToken schema)
         {
             var elementList = new List<Element>();
@@ -28,6 +23,18 @@ namespace SwaggerSchemaToXSD
             foreach (var token in schema)
             {
                 Element element = new Element() { Name = ((JProperty)token).Name, Properties = new List<Propertie>() };
+                
+                var enmType = token.First.Value<JArray>("enum");
+                if(enmType?.Count > 0)
+                {
+                    List<string> enumList = enmType.Values<string>().ToList();
+                    element.Properties = new List<Propertie>() { new Propertie() { Name = ((JProperty)token).Name, Enum = enumList } };
+                    element.IsEnum = true;
+                    elementList.Add(element);
+                    continue;
+                }
+
+
                 foreach (var prop in token.Children()["properties"].Children())
                 {
 
@@ -38,8 +45,11 @@ namespace SwaggerSchemaToXSD
                     if (prop.First.Value<string>("type") == "array")
                     {
                         string refTypeArr = prop.Children()["items"].First().Value<string>("$ref");
+                        string typeArr = prop.Children()["items"].First().Value<string>("type");
                         if (!string.IsNullOrEmpty(refTypeArr))
                             refType = refTypeArr.Replace("#/components/schemas/", "").ToString();
+                        else
+                            refType = $"xs:{typeArr}";
                     }
 
 
@@ -64,7 +74,7 @@ namespace SwaggerSchemaToXSD
                 elementList.Add(element);
             }
             GenerateXSD(elementList);
-            return "result.xsd";
+            return "./result.xsd";
         }
 
 
@@ -77,12 +87,18 @@ namespace SwaggerSchemaToXSD
             fileXsd.AppendLine($"<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">");
             foreach (var element in elementList)
             {
-                //  fileXsd.AppendLine($"<xs:element name=\"{element.Name}\">");
                 fileXsd.AppendLine($"<xs:complexType name=\"{element.Name}\">");
                 fileXsd.AppendLine($"<xs:sequence>");
 
                 foreach (var pro in element.Properties)
                 {
+                    if(element.IsEnum)
+                    {
+                        if (!enumeration.ContainsKey(element.Name))
+                            enumeration.Add(element.Name, element.Properties.First().Enum);
+                        continue;
+                    }
+
                     if (string.IsNullOrEmpty(pro.Ref))
                     {
                         string type = pro.Type;
@@ -103,9 +119,9 @@ namespace SwaggerSchemaToXSD
                             fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"xs:{type}\"/>");
                         else
                         {
-                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"{pro.Name.ToLower()}\"/>");
-                            if (!enumeration.ContainsKey(pro.Name.ToLower()))
-                                enumeration.Add(pro.Name.ToLower(), pro.Enum);
+                            fileXsd.AppendLine($"<xs:element name=\"{pro.Name}\" type=\"{pro.Name}\"/>");
+                            if (!enumeration.ContainsKey(pro.Name))
+                                enumeration.Add(pro.Name, pro.Enum);
 
                         }
                     }
@@ -121,13 +137,12 @@ namespace SwaggerSchemaToXSD
                 }
                 fileXsd.AppendLine($"</xs:sequence>");
                 fileXsd.AppendLine($"</xs:complexType>");
-                // fileXsd.AppendLine($"</xs:element>");
 
             }
 
             foreach (var enu in enumeration.Distinct())
             {
-                fileXsd.AppendLine($"<xs:simpleType name=\"{enu.Key}\" final=\"restriction\" >");
+                fileXsd.AppendLine($"<xs:simpleType name=\"{enu.Key}\">");
                 fileXsd.AppendLine($"<xs:restriction base=\"xs:string\">");
                 foreach (var item in enu.Value)
                 {

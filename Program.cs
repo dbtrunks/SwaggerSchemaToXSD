@@ -15,9 +15,10 @@ namespace SwaggerSchemaToXSD
             var json =   sagggerToXsd.LoadJson();
             var schemas = json["components"]["schemas"];
 
-           var xsd =   sagggerToXsd.ConvertSchemaTosxd(schemas);
+           var resultPath =   sagggerToXsd.ConvertSchemaTosxd(schemas);
 
-
+            Console.WriteLine("");
+            Console.WriteLine($"Wynik zapisano do pliku {resultPath}");
         }
     }
 }
