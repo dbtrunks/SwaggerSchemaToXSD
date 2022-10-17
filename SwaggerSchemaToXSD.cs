@@ -87,18 +87,17 @@ namespace SwaggerSchemaToXSD
             fileXsd.AppendLine($"<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">");
             foreach (var element in elementList)
             {
+                if(element.IsEnum)
+                  {
+                      if (!enumeration.ContainsKey(element.Name))
+                          enumeration.Add(element.Name, element.Properties.First().Enum);
+                      continue;
+                  }
                 fileXsd.AppendLine($"<xs:complexType name=\"{element.Name}\">");
                 fileXsd.AppendLine($"<xs:sequence>");
 
                 foreach (var pro in element.Properties)
                 {
-                    if(element.IsEnum)
-                    {
-                        if (!enumeration.ContainsKey(element.Name))
-                            enumeration.Add(element.Name, element.Properties.First().Enum);
-                        continue;
-                    }
-
                     if (string.IsNullOrEmpty(pro.Ref))
                     {
                         string type = pro.Type;
